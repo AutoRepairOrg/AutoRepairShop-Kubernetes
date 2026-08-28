@@ -1,13 +1,13 @@
 apiVersion: v1
-kind: ConfigMap # Usado para armazenar configurações não sensíveis da aplicação
+kind: ConfigMap
 metadata:
   name: api-config
-  namespace: oficina # ConfigMap chamado api-config no namespace oficina.
+  namespace: oficina
 data:
-  ASPNETCORE_ENVIRONMENT: "Development" # Diz a aplicação .NET que ela está rodando em ambiente de produção
-
-  DB_HOST: "sqlserver" # Configurações de banco de dados
+  ASPNETCORE_ENVIRONMENT: "Production"
+  DB_HOST: "autorepair-sqlserver.cflewrgiz7x4.us-east-1.rds.amazonaws.com"
   DB_PORT: "1433"
-  DB_NAME: "AutoRepairShopDb"
-
-  LOG_LEVEL: "Information" # Nível mínimo de log
+  DB_NAME: "AutoRepairShop"
+  DB_USER: "admin"
+  LOG_LEVEL: "Information"
+  ConnectionStrings__DefaultConnection: "Server=autorepair-sqlserver.cflewrgiz7x4.us-east-1.rds.amazonaws.com,1433;Database=AutoRepairShop;User Id=admin;Password=AutoRepair2024!;TrustServerCertificate=True;"

@@ -303,8 +303,3 @@ Este projeto faz parte do **Tech Challenge - Fase 3** da FIAP.
 - [AutoRepairShop-Database](https://github.com/AutoRepairOrg/AutoRepairShop-Database) - RDS SQL Server
 - [AutoRepairShop-Lambda](https://github.com/AutoRepairOrg/AutoRepairShop-Lambda) - Autenticação serverless
 
-
-
-✅ **README do Kubernetes pronto!**
-
-Agora vamos para o **Lambda** (CI + CD + README)? 🚀

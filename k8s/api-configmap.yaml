@@ -5,9 +5,7 @@ metadata:
   namespace: oficina
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
-  DB_HOST: "autorepair-sqlserver.cflewrgiz7x4.us-east-1.rds.amazonaws.com"
+  DB_HOST: "sqlserver"
   DB_PORT: "1433"
-  DB_NAME: "AutoRepairShop"
-  DB_USER: "admin"
+  DB_NAME: "AutoRepairShopDb"
   LOG_LEVEL: "Information"
-  ConnectionStrings__DefaultConnection: "Server=autorepair-sqlserver.cflewrgiz7x4.us-east-1.rds.amazonaws.com,1433;Database=AutoRepairShop;User Id=admin;Password=AutoRepair2024!;TrustServerCertificate=True;"

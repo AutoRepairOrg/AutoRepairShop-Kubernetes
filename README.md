@@ -1,4 +1,4 @@
-# Infraestrutura Kubernetes (EKS) e manifestos da aplicação AutoRepairShop.
+# Infraestrutura Kubernetes (EKS) e manifestos da aplicação AutoRepairShop.    
 ---
 
 ## 📖 Sobre

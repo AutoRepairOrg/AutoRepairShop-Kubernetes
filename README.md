@@ -1,4 +1,4 @@
-# Infraestrutura Kubernetes (EKS) e manifestos da aplicação AutoRepairShop.    
+# Infraestrutura Kubernetes (EKS) e manifestos da aplicação AutoRepairShop.
 ---
 
 ## 📖 Sobre
@@ -19,6 +19,7 @@ Este repositório contém:
 - **GitHub Actions** - CI/CD automático
 - **kubectl** - CLI do Kubernetes
 - **Horizontal Pod Autoscaler (HPA)** - Escalabilidade automática
+- **Fluent Bit + Amazon CloudWatch Logs** - Coleta e centralização de logs do namespace `oficina`
 
 ---
 
@@ -32,6 +33,7 @@ Este repositório contém:
   - `ec2:*`
   - `iam:*` (para IRSA)
   - `elasticloadbalancing:*`
+  - `logs:*` (CloudWatch Logs — Fluent Bit usa o IAM do node / LabRole)
 
 ---
 
@@ -52,11 +54,11 @@ Este repositório contém:
    ```
 
 3. **O workflow CD irá:**
-   - ✅ Provisionar EKS Cluster
-   - ✅ Criar Node Group
-   - ✅ Aplicar manifestos Kubernetes
-   - ✅ Criar LoadBalancer (NLB)
+   - ✅ Aplicar Fluent Bit (logs → CloudWatch)
+   - ✅ Aplicar manifestos Kubernetes da API
+   - ✅ Criar/atualizar LoadBalancer (NLB)
    - ✅ Configurar HPA
+   - ✅ Reiniciar e aguardar rollout da API
 
 ---
 
@@ -85,8 +87,16 @@ kubectl apply -f api-deployment.yaml
 kubectl apply -f api-service-nlb.yaml
 kubectl apply -f api-hpa.yaml
 
-# 5. Verificar deployment
+# 5. Deploy Fluent Bit → CloudWatch Logs
+kubectl apply -f cloudwatch-namespace.yaml
+kubectl apply -f fluent-bit-cluster-info.yaml
+kubectl apply -f fluent-bit-rbac.yaml
+kubectl apply -f fluent-bit-configmap.yaml
+kubectl apply -f fluent-bit-daemonset.yaml
+
+# 6. Verificar deployment
 kubectl get all -n oficina
+kubectl get pods -n amazon-cloudwatch
 kubectl get svc api-nlb -n oficina
 ```
 
@@ -120,7 +130,7 @@ Jobs:
   
   deploy-kubernetes:
     - Update kubeconfig
-    - Apply namespace
+    - Deploy Fluent Bit (CloudWatch Logs)
     - Apply ConfigMaps/Secrets
     - Deploy API
     - Wait for rollout
@@ -151,14 +161,19 @@ AutoRepairShop-Kubernetes/
 │   ├── variables.tf            # Variáveis do Terraform
 │   └── .terraform.lock.hcl     # Lock de versões
 ├── k8s/
-│   ├── namespace.yaml          # Namespace 'oficina'
-│   ├── api-configmap.yaml      # Configurações da API
-│   ├── api-secrets.yaml        # Secrets (JWT, etc)
-│   ├── api-deployment.yaml     # Deployment da API
-│   ├── api-service.yaml        # Service ClusterIP (interno)
-│   ├── api-service-nlb.yaml    # Service LoadBalancer (externo)
-│   └── api-hpa.yaml            # Horizontal Pod Autoscaler
-└── README.md                   # Este arquivo
+│   ├── namespace.yaml                  # Namespace 'oficina'
+│   ├── api-configmap.yaml              # Configurações da API
+│   ├── api-secrets.yaml                # Secrets (JWT, etc)
+│   ├── api-deployment.yaml             # Deployment da API
+│   ├── api-service.yaml                # Service ClusterIP (interno)
+│   ├── api-service-nlb.yaml            # Service LoadBalancer (externo)
+│   ├── api-hpa.yaml                    # Horizontal Pod Autoscaler
+│   ├── cloudwatch-namespace.yaml       # Namespace amazon-cloudwatch
+│   ├── fluent-bit-cluster-info.yaml    # Cluster/região para Fluent Bit
+│   ├── fluent-bit-rbac.yaml            # RBAC do Fluent Bit
+│   ├── fluent-bit-configmap.yaml       # Pipeline de logs → CloudWatch
+│   └── fluent-bit-daemonset.yaml       # DaemonSet Fluent Bit
+└── README.md                           # Este arquivo
 ```
 
 ## 📊 Escalabilidade
@@ -194,15 +209,63 @@ scaling_config {
 
 ---
 
-## 📈 Monitoramento
+## 📈 Monitoramento e Logs (CloudWatch)
 
-### **Comandos Úteis**
+Os pods do namespace `oficina` (API, SQL Server, etc.) enviam stdout/stderr para o **Amazon CloudWatch Logs** via **Fluent Bit** (DaemonSet).
+
+### **Como funciona**
+
+```
+Pod (oficina) → stdout → /var/log/containers/*_oficina_*.log
+                              ↓
+                    Fluent Bit (DaemonSet)
+                              ↓
+         CloudWatch Log Group:
+         /aws/containerinsights/autorepairshop-eks/application
+```
+
+- Credenciais: IAM do **node** (`LabRole`) — sem IRSA adicional
+- Retenção: **7 dias** (configurada no Fluent Bit)
+- Namespace do coletor: `amazon-cloudwatch`
+
+### **Manifestos**
+
+| Arquivo | Função |
+|---------|--------|
+| `k8s/cloudwatch-namespace.yaml` | Namespace `amazon-cloudwatch` |
+| `k8s/fluent-bit-cluster-info.yaml` | Cluster name + região |
+| `k8s/fluent-bit-rbac.yaml` | ServiceAccount + ClusterRole |
+| `k8s/fluent-bit-configmap.yaml` | Pipeline Fluent Bit → CloudWatch |
+| `k8s/fluent-bit-daemonset.yaml` | DaemonSet `aws-for-fluent-bit` |
+
+### **Consultar logs**
+
+```bash
+# Status do Fluent Bit
+kubectl get pods -n amazon-cloudwatch -l k8s-app=fluent-bit
+kubectl logs -n amazon-cloudwatch -l k8s-app=fluent-bit --tail=50
+
+# Tail no CloudWatch (após o DaemonSet estar Running)
+aws logs tail /aws/containerinsights/autorepairshop-eks/application --follow --region us-east-1
+
+# Filtrar por pod/stream
+aws logs describe-log-streams \
+  --log-group-name /aws/containerinsights/autorepairshop-eks/application \
+  --region us-east-1 \
+  --order-by LastEventTime \
+  --descending \
+  --max-items 10
+```
+
+No console AWS: **CloudWatch → Log groups →** `/aws/containerinsights/autorepairshop-eks/application`.
+
+### **Comandos Úteis (cluster)**
 
 ```bash
 # Visualizar pods
 kubectl get pods -n oficina
 
-# Logs em tempo real
+# Logs em tempo real (kubectl)
 kubectl logs -f deployment/api -n oficina
 
 # Métricas de recursos
@@ -284,6 +347,11 @@ spec:
 - ✅ ConfigMap: `api-config`
 - ✅ Secret: `api-secrets`
 - ✅ HPA: `api-hpa`
+- ✅ Namespace: `amazon-cloudwatch`
+- ✅ DaemonSet: `fluent-bit` (logs → CloudWatch)
+
+### **CloudWatch Resources**
+- ✅ Log group: `/aws/containerinsights/autorepairshop-eks/application` (criado automaticamente)
 
 ---
 
@@ -302,4 +370,3 @@ Este projeto faz parte do **Tech Challenge - Fase 3** da FIAP.
 - [AutoRepairShop-Api](https://github.com/AutoRepairOrg/AutoRepairShop-Api) - Aplicação principal
 - [AutoRepairShop-Database](https://github.com/AutoRepairOrg/AutoRepairShop-Database) - RDS SQL Server
 - [AutoRepairShop-Lambda](https://github.com/AutoRepairOrg/AutoRepairShop-Lambda) - Autenticação serverless
-

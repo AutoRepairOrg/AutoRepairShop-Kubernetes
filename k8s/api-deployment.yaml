@@ -35,3 +35,23 @@ spec:
                 name: sqlserver-secret
             - secretRef:
                 name: api-secrets
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+            # Datadog APM
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DD_ENV
+              value: "production"
+            - name: DD_SERVICE
+              value: "autorepairshop-api"
+            - name: DD_VERSION
+              value: "1.0.0"
+            - name: DD_TRACE_ENABLED
+              value: "true"
+            - name: DD_LOGS_INJECTION
+              value: "true"      

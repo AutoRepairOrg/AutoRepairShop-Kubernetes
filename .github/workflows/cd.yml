@@ -45,6 +45,34 @@ jobs:
             --docker-email="${{ github.actor }}@users.noreply.github.com" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Deploy Datadog (observability)
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        run: |
+          if [ -z "$DD_API_KEY" ]; then
+            echo "❌ Secret DD_API_KEY não configurado no repositório GitHub."
+            echo "Crie em Settings → Secrets → Actions → DD_API_KEY (API Key da conta Datadog)."
+            exit 1
+          fi
+
+          # Token interno Agent ↔ Cluster Agent (32 chars)
+          DD_TOKEN=$(openssl rand -hex 16)
+
+          kubectl apply -f k8s/datadog-namespace.yaml
+
+          kubectl -n datadog create secret generic datadog-secret \
+            --from-literal=api-key="$DD_API_KEY" \
+            --from-literal=token="$DD_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl apply -f k8s/datadog-rbac.yaml
+          kubectl apply -f k8s/datadog-configmap.yaml
+          kubectl apply -f k8s/datadog-cluster-agent.yaml
+          kubectl apply -f k8s/datadog-agent-daemonset.yaml
+
+          kubectl -n datadog rollout status deployment/datadog-cluster-agent --timeout=5m
+          kubectl -n datadog rollout status daemonset/datadog-agent --timeout=5m
+
       - name: Deploy ConfigMap
         run: |
           kubectl apply \
@@ -83,3 +111,4 @@ jobs:
       - name: Get Service Info
         run: |
           kubectl get svc,pods,hpa -n oficina
+          kubectl get pods -n datadog

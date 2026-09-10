@@ -362,3 +362,18 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Terraform
+# Local provider cache / plugins (downloaded by `terraform init`; must not be committed)
+**/.terraform/*
+# Local state files (may contain secrets)
+*.tfstate
+*.tfstate.*
+# Crash logs
+crash.log
+crash.*.log
+# Variable files that may hold sensitive values
+*.tfvars
+*.tfvars.json
+!example.tfvars
+# Keep the provider lock file committed for reproducible builds (do NOT ignore .terraform.lock.hcl)

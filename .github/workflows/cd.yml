@@ -45,6 +45,16 @@ jobs:
             --docker-email="${{ github.actor }}@users.noreply.github.com" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Deploy CloudWatch Fluent Bit
+        run: |
+          kubectl apply -f k8s/cloudwatch-namespace.yaml
+          kubectl apply -f k8s/fluent-bit-cluster-info.yaml
+          kubectl apply -f k8s/fluent-bit-rbac.yaml
+          kubectl apply -f k8s/fluent-bit-configmap.yaml
+          kubectl apply -f k8s/fluent-bit-daemonset.yaml
+
+          kubectl -n amazon-cloudwatch rollout status daemonset/fluent-bit --timeout=5m
+
       - name: Deploy ConfigMap
         run: |
           kubectl apply \
@@ -83,3 +93,4 @@ jobs:
       - name: Get Service Info
         run: |
           kubectl get svc,pods,hpa -n oficina
+          kubectl get pods -n amazon-cloudwatch -l k8s-app=fluent-bit

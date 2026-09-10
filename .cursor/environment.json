@@ -1,0 +1,4 @@
+{
+  "name": "AutoRepairShop Kubernetes (IaC)",
+  "install": "bash .cursor/install.sh"
+}

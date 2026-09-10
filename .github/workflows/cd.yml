@@ -8,6 +8,10 @@ on:
       - '.github/workflows/cd.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   deploy-kubernetes:
     runs-on: ubuntu-latest
@@ -32,17 +36,44 @@ jobs:
 
           kubectl get nodes
 
-      - name: Deploy ConfigMaps and Secrets
+      - name: Create GHCR image pull secret
         run: |
-          kubectl apply -f k8s/api-configmap.yaml -n oficina
-          kubectl apply -f k8s/api-secrets.yaml -n oficina
+          kubectl -n oficina create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username="${{ github.actor }}" \
+            --docker-password="${{ secrets.GITHUB_TOKEN }}" \
+            --docker-email="${{ github.actor }}@users.noreply.github.com" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy ConfigMap
+        run: |
+          kubectl apply \
+            -f k8s/api-configmap.yaml \
+            -n oficina
+
+      - name: Deploy API Secrets
+        run: |
+          kubectl apply \
+            -f k8s/api-secrets.yaml \
+            -n oficina
 
       - name: Deploy Application
         run: |
-          kubectl apply -f k8s/api-deployment.yaml -n oficina
-          kubectl apply -f k8s/api-service.yaml -n oficina
-          kubectl apply -f k8s/api-service-nlb.yaml -n oficina
-          kubectl apply -f k8s/api-hpa.yaml -n oficina
+          kubectl apply \
+            -f k8s/api-deployment.yaml \
+            -n oficina
+
+          kubectl apply \
+            -f k8s/api-service.yaml \
+            -n oficina
+
+          kubectl apply \
+            -f k8s/api-service-nlb.yaml \
+            -n oficina
+
+          kubectl apply \
+            -f k8s/api-hpa.yaml \
+            -n oficina
 
       - name: Restart API
         run: |

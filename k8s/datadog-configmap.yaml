@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datadog-config
+  namespace: datadog
+  labels:
+    app: datadog-agent
+    app.kubernetes.io/name: datadog-agent
+    app.kubernetes.io/part-of: autorepairshop
+data:
+  # Site Datadog (US1). Alternativas: datadoghq.eu, us3.datadoghq.com, etc.
+  DD_SITE: "datadoghq.com"
+  DD_CLUSTER_NAME: "autorepairshop-eks"
+  # Coleta de logs dos containers
+  DD_LOGS_ENABLED: "true"
+  DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+  # Não coletar logs do próprio agent
+  DD_CONTAINER_EXCLUDE_LOGS: "name:datadog-agent name:datadog-cluster-agent"
+  # Foco no namespace da aplicação (API, SQL Server, etc.)
+  DD_CONTAINER_INCLUDE: "kube_namespace:oficina"
+  DD_CONTAINER_EXCLUDE: "kube_namespace:kube-system kube_namespace:datadog"
+  # APM pronto para a API instrumentar
+  DD_APM_ENABLED: "true"
+  DD_APM_NON_LOCAL_TRAFFIC: "true"
+  # Processos / métricas de container
+  DD_PROCESS_AGENT_ENABLED: "true"
+  DD_DOGSTATSD_NON_LOCAL_TRAFFIC: "true"

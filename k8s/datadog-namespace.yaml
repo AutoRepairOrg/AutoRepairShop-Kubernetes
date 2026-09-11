@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datadog
+  labels:
+    name: datadog
+    app.kubernetes.io/name: datadog
+    app.kubernetes.io/part-of: autorepairshop

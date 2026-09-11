@@ -2,33 +2,43 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
-  namespace: oficina # Cria um Deployment chamado api dentro do namespace oficina.
+  namespace: oficina
 spec:
-  replicas: 1 # Garante que sempre exista 1 Pod rodando dessa aplicação.
+  replicas: 1
   selector:
     matchLabels:
-      app: api # Deployment gerencia todos os Pods que tiverem o label app=api
+      app: api
   template:
     metadata:
       labels:
-        app: api # Cada Pod criado terá o label app=api
+        app: api
     spec:
       imagePullSecrets:
-        - name: ghcr-secret # Kubernetes deve usar o Secret ghcr-secret para autenticar no GitHub Container Registry (GHCR) ao baixar a imagem privada
+        - name: ghcr-secret
+      initContainers:
+        - name: datadog-init
+          image: gcr.io/datadoghq/dd-lib-dotnet-init:latest
+          command: ["sh", "copy-lib.sh"]
+          env:
+            - name: DD_DOTNET_TRACER_HOME
+              value: /datadog-lib
+          volumeMounts:
+            - name: datadog-lib
+              mountPath: /datadog-lib
       containers:
-        - name: api # Define um container chamado api dentro do Pod
-          image: ghcr.io/autorepairorg/autorepairshop-api:latest # Imagem padrão, será atualizada pelo CD
+        - name: api
+          image: ghcr.io/autorepairorg/autorepairshop-api:latest
           resources:
             requests:
               cpu: "100m"
-              memory: "128Mi"  # O Kubernetes reserva no mínimo: 0.1 CPU e 128 MB RAM
+              memory: "128Mi"
             limits:
               cpu: "500m"
-              memory: "256Mi" # Container não deve ultrapassar 0.5 CPU 256 MB RAM
-          imagePullPolicy: Always # Sempre tenta baixar novamente, mesmo que já exista
+              memory: "256Mi"
+          imagePullPolicy: Always
           ports:
-            - containerPort: 8080 # Porta a ser utilizada por services e probes
-          envFrom: # Injeção de todas as chaves desses recursos como variáveis de ambiente no container
+            - containerPort: 8080
+          envFrom:
             - configMapRef:
                 name: api-config
             - secretRef:
@@ -54,4 +64,19 @@ spec:
             - name: DD_TRACE_ENABLED
               value: "true"
             - name: DD_LOGS_INJECTION
-              value: "true"      
+              value: "true"
+            # Datadog .NET Profiler
+            - name: CORECLR_ENABLE_PROFILING
+              value: "1"
+            - name: CORECLR_PROFILER
+              value: "{846F5F1C-F9AE-4B07-969E-05C26BC060D8}"
+            - name: CORECLR_PROFILER_PATH
+              value: /datadog-lib/Datadog.Trace.ClrProfiler.Native.so
+            - name: DD_DOTNET_TRACER_HOME
+              value: /datadog-lib
+          volumeMounts:
+            - name: datadog-lib
+              mountPath: /datadog-lib
+      volumes:
+        - name: datadog-lib
+          emptyDir: {}

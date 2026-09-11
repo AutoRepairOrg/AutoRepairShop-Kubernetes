@@ -45,6 +45,33 @@ jobs:
             --docker-email="${{ github.actor }}@users.noreply.github.com" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Deploy Datadog (observability)
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        run: |
+          if [ -z "$DD_API_KEY" ]; then
+            echo "❌ Secret DD_API_KEY não configurado no GitHub Actions."
+            echo "Crie em Settings → Secrets → Actions → DD_API_KEY"
+            exit 1
+          fi
+
+          DD_TOKEN=$(openssl rand -hex 16)
+
+          kubectl apply -f k8s/datadog-namespace.yaml
+
+          kubectl -n datadog create secret generic datadog-secret \
+            --from-literal=api-key="$DD_API_KEY" \
+            --from-literal=token="$DD_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl apply -f k8s/datadog-rbac.yaml
+          kubectl apply -f k8s/datadog-configmap.yaml
+          kubectl apply -f k8s/datadog-cluster-agent.yaml
+          kubectl apply -f k8s/datadog-agent-daemonset.yaml
+
+          kubectl -n datadog rollout status deployment/datadog-cluster-agent --timeout=5m
+          kubectl -n datadog rollout status daemonset/datadog-agent --timeout=5m
+
       - name: Deploy ConfigMap
         run: |
           kubectl apply \
@@ -78,8 +105,21 @@ jobs:
       - name: Restart API
         run: |
           kubectl -n oficina rollout restart deployment/api
-          kubectl -n oficina rollout status deployment/api --timeout=5m
+
+          # Init do tracer + startup com profiler pode passar de 5 min em node frio
+          if ! kubectl -n oficina rollout status deployment/api --timeout=8m; then
+            echo "==== DEBUG: pods oficina ===="
+            kubectl -n oficina get pods -o wide
+            echo "==== DEBUG: describe api pods ===="
+            kubectl -n oficina describe pods -l app=api | tail -120
+            echo "==== DEBUG: logs init/api ===="
+            kubectl -n oficina logs -l app=api --all-containers --tail=80 || true
+            echo "==== DEBUG: datadog agent ===="
+            kubectl -n datadog get pods -o wide || true
+            exit 1
+          fi
 
       - name: Get Service Info
         run: |
           kubectl get svc,pods,hpa -n oficina
+          kubectl get pods -n datadog

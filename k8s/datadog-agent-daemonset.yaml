@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: datadog-agent
+  namespace: datadog
+  labels:
+    app: datadog-agent
+    app.kubernetes.io/name: datadog-agent
+    app.kubernetes.io/part-of: autorepairshop
+spec:
+  selector:
+    matchLabels:
+      app: datadog-agent
+  template:
+    metadata:
+      labels:
+        app: datadog-agent
+        app.kubernetes.io/name: datadog-agent
+        app.kubernetes.io/part-of: autorepairshop
+    spec:
+      serviceAccountName: datadog-agent
+      containers:
+        - name: agent
+          image: gcr.io/datadoghq/agent:7.57.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            # hostPort: a API usa status.hostIP:8126 para enviar traces
+            - containerPort: 8125
+              hostPort: 8125
+              name: dogstatsdport
+              protocol: UDP
+            - containerPort: 8126
+              hostPort: 8126
+              name: traceport
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: datadog-config
+          env:
+            - name: DD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: datadog-secret
+                  key: api-key
+            - name: DD_KUBELET_TLS_VERIFY
+              value: "false"
+            - name: DD_CLUSTER_AGENT_ENABLED
+              value: "true"
+            - name: DD_CLUSTER_AGENT_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: datadog-secret
+                  key: token
+            - name: DD_CLUSTER_AGENT_URL
+              value: "https://datadog-cluster-agent.datadog.svc.cluster.local:5005"
+            - name: DD_ORCHESTRATOR_EXPLORER_ENABLED
+              value: "true"
+            - name: DD_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBERNETES
+              value: "true"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: procdir
+              mountPath: /host/proc
+              readOnly: true
+            - name: cgroups
+              mountPath: /host/sys/fs/cgroup
+              readOnly: true
+            - name: pointdir
+              mountPath: /opt/datadog-agent/run
+            - name: logpodpath
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: containerdsocket
+              mountPath: /var/run/containerd/containerd.sock
+              readOnly: true
+          livenessProbe:
+            exec:
+              command:
+                - agent
+                - health
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - agent
+                - health
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+      volumes:
+        - name: procdir
+          hostPath:
+            path: /proc
+        - name: cgroups
+          hostPath:
+            path: /sys/fs/cgroup
+        - name: pointdir
+          hostPath:
+            path: /opt/datadog-agent/run
+            type: DirectoryOrCreate
+        - name: logpodpath
+          hostPath:
+            path: /var/log/pods
+        - name: containerdsocket
+          hostPath:
+            path: /var/run/containerd/containerd.sock
+      tolerations:
+        - operator: Exists
+      nodeSelector:
+        kubernetes.io/os: linux

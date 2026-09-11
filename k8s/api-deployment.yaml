@@ -12,6 +12,18 @@ spec:
     metadata:
       labels:
         app: api
+        admission.datadoghq.com/enabled: "true"
+      annotations:
+        ad.datadoghq.com/api.logs: |
+          [{
+            "source": "dotnet",
+            "service": "autorepairshop-api",
+            "log_processing_rules": [{
+              "type": "multi_line",
+              "name": "json_logs",
+              "pattern": "\\{"
+            }]
+          }]
     spec:
       imagePullSecrets:
         - name: ghcr-secret
@@ -53,4 +65,12 @@ spec:
             - name: DD_TRACE_ENABLED
               value: "true"
             - name: DD_LOGS_INJECTION
+              value: "true"
+            - name: DD_LOGS_ENABLED
+              value: "true"
+            - name: DD_LOG_LEVEL
+              value: "info"
+            - name: DD_TRACE_SAMPLE_RATE
+              value: "1"
+            - name: DD_RUNTIME_METRICS_ENABLED
               value: "true"

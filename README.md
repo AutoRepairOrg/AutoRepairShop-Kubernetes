@@ -300,6 +300,6 @@ Este projeto faz parte do **Tech Challenge - Fase 3** da FIAP.
 ## 🔗 Links Relacionados
 
 - [AutoRepairShop-Api](https://github.com/AutoRepairOrg/AutoRepairShop-Api) - Aplicação principal
-- [AutoRepairShop-Database](https://github.com/AutoRepairOrg/AutoRepairShop-Database) - RDS SQL Server
+- [AutoRepairShop-Database](https://github.com/AutoRepairOrg/AutoRepairShop-Database) - SQL Server
 - [AutoRepairShop-Lambda](https://github.com/AutoRepairOrg/AutoRepairShop-Lambda) - Autenticação serverless
 

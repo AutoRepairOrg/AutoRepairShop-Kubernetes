@@ -3,8 +3,19 @@ kind: Deployment
 metadata:
   name: api
   namespace: oficina
+  labels:
+    app: api
+    tags.datadoghq.com/env: production
+    tags.datadoghq.com/service: autorepairshop-api
+    tags.datadoghq.com/version: "1.0.0"
 spec:
   replicas: 1
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: api
@@ -12,22 +23,37 @@ spec:
     metadata:
       labels:
         app: api
+        tags.datadoghq.com/env: production
+        tags.datadoghq.com/service: autorepairshop-api
+        tags.datadoghq.com/version: "1.0.0"
     spec:
       imagePullSecrets:
         - name: ghcr-secret
+      # Copia o tracer .NET para o volume compartilhado antes de subir a API
+      initContainers:
+        - name: datadog-lib-dotnet-init
+          image: gcr.io/datadoghq/dd-lib-dotnet-init:v3.10.1
+          imagePullPolicy: IfNotPresent
+          # O destino (/datadog-lib) é obrigatório — sem ele o copy falha e a API não sobe
+          command: ["sh", "copy-lib.sh", "/datadog-lib"]
+          volumeMounts:
+            - name: datadog-lib
+              mountPath: /datadog-lib
       containers:
         - name: api
           image: ghcr.io/autorepairorg/autorepairshop-api:latest
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "256Mi"
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+              name: http
+          # Profiler .NET precisa de mais memória do que 256Mi
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
           envFrom:
             - configMapRef:
                 name: api-config
@@ -40,10 +66,13 @@ spec:
               value: "Production"
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
+            # --- Datadog APM (agent no mesmo node) ---
             - name: DD_AGENT_HOST
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: DD_TRACE_AGENT_PORT
+              value: "8126"
             - name: DD_ENV
               value: "production"
             - name: DD_SERVICE
@@ -54,3 +83,39 @@ spec:
               value: "true"
             - name: DD_LOGS_INJECTION
               value: "true"
+            - name: DD_RUNTIME_METRICS_ENABLED
+              value: "true"
+            # --- Auto-instrumentação .NET (libs do init container) ---
+            - name: CORECLR_ENABLE_PROFILING
+              value: "1"
+            - name: CORECLR_PROFILER
+              value: "{846F5F1C-F9AE-4B07-969E-05C26BC060D8}"
+            # Layout do pacote injectado pelo dd-lib-dotnet-init
+            - name: CORECLR_PROFILER_PATH
+              value: /datadog-lib/linux-x64/Datadog.Trace.ClrProfiler.Native.so
+            - name: DD_DOTNET_TRACER_HOME
+              value: /datadog-lib
+            - name: LD_LIBRARY_PATH
+              value: /datadog-lib/linux-x64
+          volumeMounts:
+            - name: datadog-lib
+              mountPath: /datadog-lib
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: datadog-lib
+          emptyDir: {}

@@ -36,6 +36,10 @@ jobs:
 
           kubectl get nodes
 
+      - name: Ensure namespace exists
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+
       - name: Create GHCR image pull secret
         run: |
           kubectl -n oficina create secret docker-registry ghcr-secret \
